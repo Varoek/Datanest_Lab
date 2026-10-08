@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: nextcloud_db
+    restart: always
+    volumes:
+      - /mnt/wd-ssd/nextcloud/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: nextcloud_db
+      POSTGRES_USER: nextcloud_user
+      POSTGRES_PASSWORD: CHANGE_ME_NEXTCLOUD_DB_PASSWORD
+    networks:
+      - nextcloud-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud_user -d nextcloud_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: nextcloud_redis
+    restart: always
+    command: redis-server --requirepass CHANGE_ME_REDIS_PASSWORD
+    networks:
+      - nextcloud-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: nextcloud:28-apache
+    container_name: nextcloud_app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      - /mnt/wd-ssd/nextcloud/html:/var/www/html
+      - /mnt/wd-ssd/nextcloud/data:/var/www/html/data
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=nextcloud_db
+      - POSTGRES_USER=nextcloud_user
+      - POSTGRES_PASSWORD=CHANGE_ME_NEXTCLOUD_DB_PASSWORD
+      - REDIS_HOST=redis
+      - REDIS_HOST_PASSWORD=CHANGE_ME_REDIS_PASSWORD
+      - NEXTCLOUD_ADMIN_USER=admin
+      - NEXTCLOUD_ADMIN_PASSWORD=CHANGE_ME_ADMIN_PASSWORD
+      - NEXTCLOUD_DATA_DIR=/var/www/html/data
+    networks:
+      - nextcloud-net
+      - proxy-net
+
+networks:
+  nextcloud-net:
+    internal: true
+  proxy-net:
+    external: true

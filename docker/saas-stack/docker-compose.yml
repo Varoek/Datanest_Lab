@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Vaultwarden - Enterprise Credential Management
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden_app
+    restart: always
+    environment:
+      - WEBSOCKET_ENABLED=true
+      - SIGNUPS_ALLOWED=false
+    volumes:
+      - /mnt/wd-ssd/vaultwarden/data:/data
+    ports:
+      - "8081:80"
+    networks:
+      - proxy-net
+
+  # Stirling PDF - Document Processing Suite
+  stirling_pdf:
+    image: frooodle/s-pdf:latest
+    container_name: stirling_pdf_app
+    restart: always
+    ports:
+      - "8082:8080"
+    environment:
+      - DOCKER_ENABLE_SECURITY=false
+      - SYSTEM_DEFAULTLOCALE=id_ID
+    volumes:
+      - /mnt/wd-ssd/stirling-pdf/trainingData:/usr/share/tessdata
+      - /mnt/wd-ssd/stirling-pdf/extraConfigs:/configs
+    networks:
+      - proxy-net
+
+  # Immich DAM Stack
+  immich_postgres:
+    image: registry.hub.docker.com/tensorchord/pgvecto-rs:pg14-v0.2.0
+    container_name: immich_postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: CHANGE_ME_IMMICH_DB_PASSWORD
+      POSTGRES_USER: postgres
+      POSTGRES_DB: immich
+    volumes:
+      - /mnt/wd-ssd/immich/postgres:/var/lib/postgresql/data
+    networks:
+      - immich-net
+
+  immich_redis:
+    image: redis:alpine
+    container_name: immich_redis
+    restart: always
+    networks:
+      - immich-net
+
+  immich_server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich_server
+    restart: always
+    volumes:
+      - /mnt/wd-ssd/immich/upload:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    ports:
+      - "2283:2283"
+    depends_on:
+      - immich_postgres
+      - immich_redis
+    networks:
+      - immich-net
+      - proxy-net
+
+  immich_machine_learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich_ml
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+    volumes:
+      - /mnt/wd-ssd/immich/cache:/cache
+    networks:
+      - immich-net
+
+networks:
+  proxy-net:
+    external: true
+  immich-net:
+    internal: true

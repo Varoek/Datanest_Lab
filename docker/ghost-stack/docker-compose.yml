@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  ghost_db:
+    image: mariadb:10.11
+    container_name: ghost_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: CHANGE_ME_ROOT_PASSWORD
+      MYSQL_DATABASE: ghost_production
+      MYSQL_USER: ghost_user
+      MYSQL_PASSWORD: CHANGE_ME_GHOST_DB_PASSWORD
+    volumes:
+      - /mnt/wd-ssd/ghost/db_data:/var/lib/mysql
+    networks:
+      - public-web-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ghost_app:
+    image: ghost:5-alpine
+    container_name: ghost_app
+    restart: always
+    depends_on:
+      ghost_db:
+        condition: service_healthy
+    environment:
+      url: https://datanest.my.id
+      database__client: mysql
+      database__connection__host: ghost_db
+      database__connection__port: 3306
+      database__connection__user: ghost_user
+      database__connection__password: CHANGE_ME_GHOST_DB_PASSWORD
+      database__connection__database: ghost_production
+    volumes:
+      - /mnt/wd-ssd/ghost/content:/var/lib/ghost/content
+    ports:
+      - "2368:2368"
+    networks:
+      - public-web-net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared_tunnel
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=YOUR_CLOUDFLARE_TUNNEL_TOKEN_HERE
+    networks:
+      - public-web-net
+
+networks:
+  public-web-net:
+    name: public-web-net
+    driver: bridge
